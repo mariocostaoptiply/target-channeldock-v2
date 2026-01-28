@@ -52,12 +52,8 @@ class BuyOrdersSink(ChannelDockBaseSink):
                 )
                 continue
 
-            # Handle both camelCase and snake_case field names
+            # Get value directly from record using the exact field name from data.singer
             value = record.get(optiply_field)
-            if value is None:
-                # Try alternative field name formats
-                alt_field = optiply_field.replace("Id", "_id")
-                value = record.get(alt_field)
 
             self.logger.info(
                 f"Mapping '{optiply_field}' -> '{target_field}': {value}"
@@ -166,15 +162,17 @@ class BuyOrdersSink(ChannelDockBaseSink):
                 target_field = mapping["targetField"]
 
                 # Extract field name from nested path (e.g., "items[].ean" -> "ean")
-                field_name = target_field.replace(f"{items_key}.", "").replace(
-                    "[].", ""
-                )
+                # Handle both "items[].ean" and "items.ean" formats
+                if target_field.startswith(f"{items_key}[]."):
+                    field_name = target_field.replace(f"{items_key}[].", "")
+                elif target_field.startswith(f"{items_key}."):
+                    field_name = target_field.replace(f"{items_key}.", "")
+                else:
+                    # Fallback: remove any "[]." pattern
+                    field_name = target_field.replace("[].", "").replace(f"{items_key}.", "")
 
-                # Get value - handle various field name formats
+                # Get value directly from line item using exact field name from data.singer
                 value = line.get(optiply_field)
-                if value is None:
-                    alt_field = optiply_field.replace("Id", "_id")
-                    value = line.get(alt_field)
 
                 if value is not None:
                     item_payload[field_name] = value
@@ -225,24 +223,26 @@ class BuyOrdersSink(ChannelDockBaseSink):
                 return json.load(f)
 
         # Fallback to minimal config if file not found
+        # Mappings based on actual field names from data.singer
         return {
             "buyOrders": {
                 "endpoint": "/seller/delivery",
                 "method": "POST",
                 "mappings": [
                     {
-                        "optiplyField": "optiplyBuyOrderId",
+                        "optiplyField": "externalid",
                         "targetField": "ref",
                         "transformation": "direct",
-                        "storeSeparately": True,
+                        "required": True,
                     },
                     {
-                        "optiplyField": "supplierId",
+                        "optiplyField": "supplier_remoteId",
                         "targetField": "supplier_id",
                         "transformation": "direct",
+                        "required": True,
                     },
                     {
-                        "optiplyField": "expectedDeliveryTime",
+                        "optiplyField": "transaction_date",
                         "targetField": "delivery_date",
                         "transformation": "date",
                         "dateFormat": "YYYY-MM-DD",
