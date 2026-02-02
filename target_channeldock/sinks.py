@@ -68,7 +68,7 @@ class BuyOrdersSink(ChannelDockBaseSink):
             item = {}
             
             # Map ean from optiplyWebshopProductRemoteID
-            ean = line.get("optiplyWebshopProductRemoteID")
+            ean = line.get("eanCode")
             if ean is not None:
                 item["ean"] = str(ean)
             
